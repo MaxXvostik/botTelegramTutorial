@@ -1,13 +1,21 @@
 package main
 
 import (
+	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
+	"net/http"
 	"strconv"
 	"strings"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
+
+type binanceResp struct {
+	Price float64 `json:"price,string"`
+	Code  int64   `json:"code"`
+}
 
 type wallet map[string]float64
 
@@ -70,9 +78,17 @@ func main() {
 				bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, "Валюта удалена"))
 			case "SHOW":
 				msg := "Баланс:\n"
+				var usdSum float64
 				for key, val := range db[update.Message.Chat.ID] {
-					msg += fmt.Sprintf("%s: %f\n", key, val)
+					coinPrice, err := getPrice(key)
+
+					if err != nil {
+						bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, err.Error()))
+					}
+					usdSum += val * coinPrice
+					msg += fmt.Sprintf("%s: %f [%.2f]\n", key, val, val*coinPrice)
 				}
+				msg += fmt.Sprintf("Сумма:%.2f\n", usdSum)
 
 				bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, msg))
 			default:
@@ -81,4 +97,26 @@ func main() {
 
 		}
 	}
+}
+func getPrice(coin string) (price float64, err error) {
+	resp, err := http.Get(fmt.Sprintf("https://api.binance.com/api/v3/ticker/price?symbol=%sUSDT", coin))
+	if err != nil {
+		return
+	}
+	defer resp.Body.Close()
+
+	var jsonResp binanceResp
+
+	err = json.NewDecoder(resp.Body).Decode(&jsonResp)
+	if err != nil {
+		return
+	}
+
+	if jsonResp.Code != 0 {
+		err = errors.New("Не корректная валюта")
+		return
+	}
+
+	price = jsonResp.Price
+	return
 }
