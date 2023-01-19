@@ -103,9 +103,16 @@ func getPrice(coin string) (price float64, err error) {
 	if err != nil {
 		return
 	}
+
+	rub, err := http.Get(fmt.Sprint("https://api.binance.com/api/v3/ticker/price?symbol=USDTRUB"))
+	if err != nil {
+		return
+	}
+
 	defer resp.Body.Close()
 
 	var jsonResp binanceResp
+	var jsonRub binanceResp
 
 	err = json.NewDecoder(resp.Body).Decode(&jsonResp)
 	if err != nil {
@@ -117,6 +124,12 @@ func getPrice(coin string) (price float64, err error) {
 		return
 	}
 
-	price = jsonResp.Price
+	err = json.NewDecoder(rub.Body).Decode(&jsonRub)
+	if err != nil {
+		log.Fatal("rubli nou")
+		return
+	}
+
+	price = jsonResp.Price //* jsonRub.Price
 	return
 }
